@@ -220,7 +220,7 @@ def _load(path, default):
 
 def _save(path, obj):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp"
+    tmp = f"{path}.{os.getpid()}.{time.time_ns()}.tmp"  # unique: hooks and the sweeper may write at once
     with open(tmp, "w") as f:
         json.dump(obj, f, indent=1, sort_keys=True)
     os.replace(tmp, path)
@@ -454,8 +454,10 @@ def cmd_install_sweeper():
     # copy the script to a stable path: plugin cache paths change on every update
     stable = os.path.join(DIR, "bin", "journal.py")
     os.makedirs(os.path.dirname(stable), exist_ok=True)
-    with open(os.path.abspath(__file__)) as src, open(stable, "w") as dst:
-        dst.write(src.read())
+    here = os.path.dirname(os.path.abspath(__file__))
+    for name in ("journal.py", "mask_pii.py"):  # journal.py imports the masker
+        with open(os.path.join(here, name)) as src, open(os.path.join(os.path.dirname(stable), name), "w") as dst:
+            dst.write(src.read())
     plist = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>

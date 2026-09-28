@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1] - 2026-09-28
+
+### Fixed
+- `install-sweeper` now copies the masker next to the script, so the hourly
+  background sweep keeps working after 0.3.0 (it imports `mask_pii`).
+- Writes use unique temp files, so a hook and the background sweep saving
+  the same session at the same moment no longer collide.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added
