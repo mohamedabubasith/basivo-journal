@@ -1,7 +1,7 @@
 {
   "name": "basivo-journal",
-  "version": "0.3.1",
-  "description": "Personal activity journal for Claude Code: every session is saved live to your own private GitHub repo (stats plus your chat history, with secrets masked), with a catch-up sweep so nothing is missed. Comes with a dashboard (tabs, dark/light, chat viewer, charts) you can deploy free on Vercel.",
+  "version": "0.4.0",
+  "description": "Personal memory and activity journal for Claude Code: every session is saved live to your own private GitHub repo (stats plus chat history, secrets masked). Claude can search your past work with journal_search / journal_session / journal_recent, each new session starts with a short recap, and a dashboard (tabs, dark/light, chat viewer) deploys free on Vercel.",
   "author": {
     "name": "Basivo",
     "url": "https://basivo.in"
@@ -10,12 +10,23 @@
   "repository": "https://github.com/mohamedabubasith/basivo-journal",
   "license": "MIT",
   "keywords": [
-    "journal",
     "activity",
-    "tracking",
-    "productivity",
-    "learning",
+    "dashboard",
     "github",
-    "dashboard"
-  ]
+    "journal",
+    "learning",
+    "mcp",
+    "memory",
+    "productivity",
+    "search",
+    "tracking"
+  ],
+  "mcpServers": {
+    "journal": {
+      "command": "python3",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/mcp_server.py"
+      ]
+    }
+  }
 }

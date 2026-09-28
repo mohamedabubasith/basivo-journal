@@ -12,11 +12,16 @@ full clone at `~/.basivo-journal/data`.
    `gh repo create $ARGUMENTS --private`. Never use a public repo.
    If no repo was given, ask for one (suggest `<their-user>/basivo-journal-data`).
 2. Clone it: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/journal.py" setup $ARGUMENTS`
-3. Load past sessions (safe to re-run; same session = same file):
+   On a new laptop this brings back the whole history (sessions, chats); the
+   search index builds itself on first use.
+3. Load this machine's past sessions (safe to re-run; same session = same file):
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/journal.py" backfill`
    Report sessions saved, total hours, and whether the push succeeded.
 4. Offer the hourly sweep (macOS; catches sessions whose hooks didn't run):
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/journal.py" install-sweeper`
-5. Suggest keeping Claude Code's own history longer than the 30-day default so
+5. Tell the user memory is ready: in a new session Claude can use
+   `journal_search` / `journal_session` / `journal_recent` / `journal_stats`
+   (restart Claude Code first so the MCP server loads).
+6. Suggest keeping Claude Code's own history longer than the 30-day default so
    old sessions can always be rebuilt: set `"cleanupPeriodDays": 3650` in
    `~/.claude/settings.json` (ask before editing it).

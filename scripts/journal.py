@@ -422,12 +422,22 @@ def sweep(root, all_files=False):
 
 
 def cmd_start():
+    hook = _hook_input()
     root = data_dir()
     if not root:
         return
     sweep(root)
     push_background(root, force=True)
     card = aggregate(load_rows(root))["card"]
+    try:
+        import memory
+        db = memory.connect()
+        memory.refresh(db, root)
+        recap = memory.project_recap(db, hook.get("cwd") or os.getcwd())
+        if recap:
+            card += " " + recap
+    except Exception:
+        pass  # the card must never break session start
     with open(CARD_CACHE, "w") as f:
         f.write(card)
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart",
@@ -455,7 +465,7 @@ def cmd_install_sweeper():
     stable = os.path.join(DIR, "bin", "journal.py")
     os.makedirs(os.path.dirname(stable), exist_ok=True)
     here = os.path.dirname(os.path.abspath(__file__))
-    for name in ("journal.py", "mask_pii.py"):  # journal.py imports the masker
+    for name in ("journal.py", "mask_pii.py", "memory.py"):  # journal.py imports these
         with open(os.path.join(here, name)) as src, open(os.path.join(os.path.dirname(stable), name), "w") as dst:
             dst.write(src.read())
     plist = f"""<?xml version="1.0" encoding="UTF-8"?>

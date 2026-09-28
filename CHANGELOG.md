@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.0] - 2026-09-28
+
+### Added
+- **Memory for Claude**: a local MCP server (`journal`) with
+  `journal_search`, `journal_session`, `journal_recent` and `journal_stats`.
+  Claude calls them only when past context helps; each lookup returns short
+  snippets (about 100–300 tokens), not whole chats.
+- Local full-text index (`~/.basivo-journal/index.db`, SQLite FTS5 with
+  stemming), refreshed incrementally before each query. Duplicate pasted
+  blocks are indexed once and results are spread across sessions. It's a
+  cache, so nothing extra to sync between machines.
+- **Project recap** in the start-of-session card: the last sessions in the
+  folder you're working in.
+- README: full setup, **new-laptop guide**, memory usage, file map,
+  troubleshooting, uninstall.
+
 ## [0.3.1] - 2026-09-28
 
 ### Fixed
