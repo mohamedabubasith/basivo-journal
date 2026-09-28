@@ -1,11 +1,22 @@
 {
   "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/journal.py\" checkpoint",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/journal.py\" send",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/journal.py\" final",
             "timeout": 15
           }
         ]
@@ -17,8 +28,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/journal.py\" card",
-            "timeout": 10
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/journal.py\" start",
+            "timeout": 15
           }
         ]
       }

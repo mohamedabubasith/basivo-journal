@@ -1,27 +1,22 @@
 ---
-description: Connect basivo-journal to your n8n (ingest + stats webhooks), then backfill past sessions.
-argument-hint: <ingest-webhook-url> <key>
+description: Connect basivo-journal to your PRIVATE GitHub data repo, load past sessions, and (optionally) turn on the hourly background sweep.
+argument-hint: <owner/repo>   e.g. yourname/basivo-journal-data
 ---
 
-Goal: write `~/.basivo-journal/config.json` and load past sessions.
+Goal: one private git repo holds a JSON file per session; this machine keeps a
+full clone at `~/.basivo-journal/data`.
 
-1. If `$ARGUMENTS` has a URL and a key, run:
-   ```
-   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/journal.py" setup <url> <key>
-   ```
-   Otherwise explain what's needed, in two lines:
-   - the n8n **ingest** webhook URL (workflow "Claude Journal: Ingest", path
-     `/webhook/claude-journal`); the stats URL is the same with `-stats`;
-   - the shared key that workflow checks in the `x-journal-key` header.
-   Suggest they run the setup command in their own terminal so the key never
-   appears in the chat, then stop.
-2. Check it works: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/journal.py" stats`
-   must return JSON with `"ok": true`. A 401 means the key doesn't match.
-3. Offer the backfill (reads `~/.claude/projects`, sends one row per past
-   session, safe to re-run — rows upsert by session id):
-   ```
-   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/journal.py" backfill
-   ```
-   Report sessions found, sent, queued, and total hours.
-
-Never echo the key back to the user.
+1. If `$ARGUMENTS` names a repo, check it exists and is **private**:
+   `gh repo view $ARGUMENTS --json visibility --jq .visibility` must print
+   `PRIVATE`. If it doesn't exist, offer to create it:
+   `gh repo create $ARGUMENTS --private`. Never use a public repo.
+   If no repo was given, ask for one (suggest `<their-user>/basivo-journal-data`).
+2. Clone it: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/journal.py" setup $ARGUMENTS`
+3. Load past sessions (safe to re-run; same session = same file):
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/journal.py" backfill`
+   Report sessions saved, total hours, and whether the push succeeded.
+4. Offer the hourly sweep (macOS; catches sessions whose hooks didn't run):
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/journal.py" install-sweeper`
+5. Suggest keeping Claude Code's own history longer than the 30-day default so
+   old sessions can always be rebuilt: set `"cleanupPeriodDays": 3650` in
+   `~/.claude/settings.json` (ask before editing it).

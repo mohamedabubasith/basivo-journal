@@ -54,8 +54,36 @@ assert journal.mcp_server("mcp__plugin_basivo-qa_playwright__browser_click") == 
 assert journal.mcp_server("mcp__plugin_context-mode_context-mode__ctx_search") == "context-mode"
 print("PASS  summarize: counts, idle cap, MCP names, languages, sites, no text leak")
 
-# No config -> hooks are silent no-ops.
+# Storage + stats in a throwaway home/repo.
+import subprocess
+with tempfile.TemporaryDirectory() as home:
+    root = os.path.join(home, "data")
+    subprocess.run(["git", "init", "-q", root], check=True)
+    r1 = dict(row, source="hook")
+    assert journal.write_row(root, r1) is True
+    assert journal.write_row(root, r1) is False              # unchanged -> no rewrite
+    r2 = dict(r1, minutes=9.0)
+    assert journal.write_row(root, r2) is True               # same session -> same file, updated
+    files = [p for p in os.popen(f"find {root}/sessions -name '*.json'").read().split()]
+    assert len(files) == 1 and files[0].endswith("sessions/2026/09/sess-1.json"), files
+    other = dict(r1, session_id="sess-2", started_at="2026-08-01T09:00:00Z", minutes=60,
+                 languages={"Go": 3}, mcps={"figma": 2}, project="~/code/api")
+    journal.write_row(root, other)
+    rows = journal.load_rows(root)
+    assert len(rows) == 2
+    now = journal._ts("2026-09-29T08:00:00Z")
+    st = journal.aggregate(rows, now=now)
+    assert st["all_time"]["sessions"] == 2 and st["all_time"]["hours"] == 1.1, st["all_time"]
+    assert st["last_7_days"]["sessions"] == 1 and st["streak_days"] == 1, (st["last_7_days"], st["streak_days"])
+    assert st["all_time"]["top_projects"][0] == {"name": "api", "value": 1.0}
+    assert {"name": "language:Python", "first": "2026-09-28"} in st["new_in_last_30_days"]
+    assert "hunter2" not in json.dumps(st)
+    assert st["card"].startswith("Journal: 2 sessions, 1.1 h since 2026-08-01")
+print("PASS  one file per session, idempotent writes, stats + streak + learning + card")
+
+# No data repo -> hooks are silent no-ops.
 journal.CONFIG = "/nonexistent/config.json"
-assert journal.load_config() is None
-print("PASS  missing config is a silent no-op")
+journal.DIR = "/nonexistent"
+assert journal.data_dir() is None
+print("PASS  missing data repo is a silent no-op")
 print("\nAll basivo-journal tests passed.")
