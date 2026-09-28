@@ -1,0 +1,69 @@
+{
+  "name": "claude_journal",
+  "columns": [
+    {
+      "name": "session_id",
+      "type": "string"
+    },
+    {
+      "name": "started_at",
+      "type": "date"
+    },
+    {
+      "name": "ended_at",
+      "type": "date"
+    },
+    {
+      "name": "machine",
+      "type": "string"
+    },
+    {
+      "name": "project",
+      "type": "string"
+    },
+    {
+      "name": "minutes",
+      "type": "number"
+    },
+    {
+      "name": "user_msgs",
+      "type": "number"
+    },
+    {
+      "name": "tool_calls",
+      "type": "number"
+    },
+    {
+      "name": "languages",
+      "type": "string"
+    },
+    {
+      "name": "tools",
+      "type": "string"
+    },
+    {
+      "name": "mcps",
+      "type": "string"
+    },
+    {
+      "name": "skills",
+      "type": "string"
+    },
+    {
+      "name": "sites",
+      "type": "string"
+    },
+    {
+      "name": "model",
+      "type": "string"
+    },
+    {
+      "name": "tokens_out",
+      "type": "number"
+    },
+    {
+      "name": "source",
+      "type": "string"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "basivo-journal",
+  "version": "0.1.0",
+  "description": "Personal activity journal for Claude Code: every session becomes one small row (time, projects, languages, tools, MCPs, skills, sites) in your own self-hosted n8n. Shows your stats, strengths and what you're learning, and gives every new session a short 'about me' card. No chat text or file contents leave your machine.",
+  "author": {
+    "name": "Basivo",
+    "url": "https://basivo.in"
+  },
+  "homepage": "https://github.com/mohamedabubasith/basivo-journal",
+  "repository": "https://github.com/mohamedabubasith/basivo-journal",
+  "license": "MIT",
+  "keywords": ["journal", "activity", "tracking", "n8n", "productivity", "learning", "self-hosted"]
+}
