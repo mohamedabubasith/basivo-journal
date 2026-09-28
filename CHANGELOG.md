@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.5.0] - 2026-09-28
+
+### Changed
+- **No git, GitHub CLI or Homebrew needed.** Sync uses GitHub's REST API with
+  a fine-grained token (Contents read/write on your data repo only), using
+  standard-library Python. It works the same on Windows, macOS and Linux. A
+  new laptop downloads its full history in one request (about 4 s for 76
+  files, down from about 50 s).
+- Hooks and the memory server start through `scripts/run`, which finds
+  `python3`, `python` or `py`.
+- Existing git clones keep working until a token is added.
+
+### Added
+- `journal.py set-token`: hidden prompt, and checks the token can write to the repo.
+- **Google Drive (or any synced folder) mirror**: `journal.py mirror auto`
+  finds Google Drive for desktop on Windows/macOS. You can also use a folder
+  instead of GitHub with `journal.py setup <folder>`.
+- **Offline report**: `/journal-report` writes one self-contained HTML file
+  (Overview, Chats with search, Projects, light/dark). No server, no internet.
+- `journal.py doctor`: a cross-OS checklist with the exact fix for each problem.
+- **Token expiry handling**: saving continues locally, the session card says
+  sync is paused, and everything catches up once a new token is saved.
+- Background sweep for each OS: launchd (macOS), Task Scheduler (Windows), cron (Linux).
+- README: "What you need", one setup flow for every OS, "Built to last".
+
 ## [0.4.0] - 2026-09-28
 
 ### Added

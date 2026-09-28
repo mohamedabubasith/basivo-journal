@@ -15,8 +15,13 @@ Commands:
   journal.py backfill     save every session found in ~/.claude/projects
   journal.py stats        print aggregated stats (JSON) from the local copy
   journal.py summarize <transcript.jsonl>   print one session's record
-  journal.py setup <owner/repo>             clone your private data repo
+  journal.py setup <owner/repo>             sync with your private GitHub repo (API, no git)
+  journal.py setup <folder>                 or use a folder (e.g. Google Drive) instead
+  journal.py set-token                      save a GitHub token (typed hidden)
+  journal.py mirror auto|<folder>|off       also keep a copy in Google Drive (or any folder)
+  journal.py report [out.html]              offline HTML dashboard, opens in your browser
   journal.py sync         commit + push now (foreground)
+  journal.py doctor       what this machine still needs (git, GitHub login, repo)
   journal.py install-sweeper / uninstall-sweeper   hourly sweep via launchd (macOS)
 """
 import collections
@@ -228,7 +233,7 @@ def _save(path, obj):
 
 def data_dir():
     d = _load(CONFIG, {}).get("data_dir") or os.path.join(DIR, "data")
-    return d if os.path.isdir(os.path.join(d, ".git")) else None
+    return d if os.path.isdir(d) else None
 
 
 # ---------- storage: one file per session ----------
@@ -280,7 +285,14 @@ def _git(root, *args, timeout=60):
     return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True, timeout=timeout)
 
 
+def is_git(root):
+    return os.path.isdir(os.path.join(root, ".git"))
+
+
 def commit(root, msg):
+    """Legacy git clones only: record changes locally before a git push."""
+    if not is_git(root):
+        return False
     _git(root, "add", "-A", "sessions", "chats")
     if _git(root, "diff", "--cached", "--quiet").returncode == 0:
         return False
@@ -288,14 +300,43 @@ def commit(root, msg):
     return True
 
 
+def remotes():
+    import storage
+    cfg = _load(CONFIG, {})
+    out = []
+    if cfg.get("github_repo") and cfg.get("github_token"):
+        out.append(storage.GitHubRemote(cfg["github_repo"], cfg["github_token"], cfg.get("github_branch", "main")))
+    if cfg.get("mirror_dir"):
+        out.append(storage.FolderRemote(cfg["mirror_dir"]))
+    return out
+
+
 def push_now(root):
-    _git(root, "pull", "-q", "--rebase", "--autostash", timeout=60)
-    ok = _git(root, "push", "-q", "-u", "origin", "HEAD", timeout=90).returncode == 0
-    if ok:
-        st = _load(STATE, {})
+    """Sync with every configured remote (GitHub API, Google Drive folder, ...).
+    Returns (all_ok, results). A git clone without a token still syncs via git."""
+    import storage
+    results = []
+    if is_git(root) and not _load(CONFIG, {}).get("github_token"):
+        commit(root, "sync")
+        _git(root, "pull", "-q", "--rebase", "--autostash", timeout=60)
+        ok = _git(root, "push", "-q", "-u", "origin", "HEAD", timeout=90).returncode == 0
+        results.append({"remote": "git origin", "ok": ok})
+    for rm in remotes():
+        try:
+            r = storage.sync(root, rm, f"journal sync from {socket.gethostname().split('.')[0]}")
+            r["ok"] = True
+        except storage.HttpError as e:
+            r = {"remote": rm.label, "ok": False, "status": e.status, "error": str(e)[:160]}
+        except Exception as e:  # offline, drive not mounted, ...: try again next time
+            r = {"remote": rm.label, "ok": False, "error": str(e)[:160]}
+        results.append(r)
+    ok = all(r["ok"] for r in results)
+    st = _load(STATE, {})
+    st["last_sync"] = {"at": time.time(), "results": results}
+    if ok and results:
         st["last_push"] = time.time()
-        _save(STATE, st)
-    return ok
+    _save(STATE, st)
+    return ok, results
 
 
 def push_background(root, force=False):
@@ -304,9 +345,20 @@ def push_background(root, force=False):
         return
     st["last_push_try"] = time.time()
     _save(STATE, st)
+    kw = {"creationflags": 0x00000008} if os.name == "nt" else {"start_new_session": True}  # DETACHED_PROCESS
     subprocess.Popen([sys.executable, os.path.abspath(__file__), "sync"],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
-                     start_new_session=True)
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, **kw)
+
+
+def sync_notice():
+    """One line for the session card when syncing is failing, else ''."""
+    res = (_load(STATE, {}).get("last_sync") or {}).get("results") or []
+    bad = [r for r in res if not r.get("ok")]
+    if not bad:
+        return ""
+    if any(r.get("status") == 401 for r in bad):
+        return "Note: journal sync to GitHub is paused because the token expired; sessions are kept locally. Tell the user to run /journal-setup to add a new token."
+    return "Note: journal sync is failing (" + "; ".join(r["remote"] for r in bad) + "); sessions are kept locally and retried."
 
 
 # ---------- stats (computed from the local copy) ----------
@@ -429,6 +481,9 @@ def cmd_start():
     sweep(root)
     push_background(root, force=True)
     card = aggregate(load_rows(root))["card"]
+    notice = sync_notice()
+    if notice:
+        card += " " + notice
     try:
         import memory
         db = memory.connect()
@@ -444,20 +499,143 @@ def cmd_start():
           "additionalContext": "About this user (basivo-journal, their own activity history): " + card}}))
 
 
-def cmd_setup(repo):
+def _write_config(**changes):
     os.makedirs(DIR, exist_ok=True)
-    os.chmod(DIR, 0o700)
-    target = os.path.join(DIR, "data")
-    if not os.path.isdir(os.path.join(target, ".git")):
-        url = repo if "://" in repo or repo.startswith("git@") else f"https://github.com/{repo}.git"
-        r = subprocess.run(["git", "clone", "-q", url, target], capture_output=True, text=True)
-        if r.returncode:
-            sys.exit("clone failed: " + r.stderr.strip())
+    try:
+        os.chmod(DIR, 0o700)
+    except OSError:
+        pass
     cfg = _load(CONFIG, {})
-    cfg["data_dir"] = target
+    for k, v in changes.items():
+        if v is None:
+            cfg.pop(k, None)
+        else:
+            cfg[k] = v
     _save(CONFIG, cfg)
-    os.chmod(CONFIG, 0o600)
-    print(f"data repo ready at {target}")
+    try:
+        os.chmod(CONFIG, 0o600)
+    except OSError:
+        pass
+    return cfg
+
+
+def token_url(repo=""):
+    # contents / metadata / expires_in are honored by GitHub's form; target_name is left out on
+    # purpose (it only pre-fills visually: github.com/orgs/community/discussions/188111)
+    q = ("name=basivo-journal&description=basivo-journal+sync+for+your+private+data+repo"
+         "&expires_in=365&contents=write&metadata=read")
+    return "https://github.com/settings/personal-access-tokens/new?" + q
+
+
+def cmd_setup(target):
+    """setup <owner/repo> : GitHub repo via API (token needed first: journal.py set-token)
+    setup <folder>       : use a folder (e.g. Google Drive) as the only sync place"""
+    import storage
+    local = os.path.join(DIR, "data")
+    os.makedirs(os.path.join(local, "sessions"), exist_ok=True)
+    looks_repo = "/" in target and not os.path.exists(os.path.expanduser(target)) and target.count("/") == 1 and not target.startswith(("~", "/", "."))
+    if looks_repo:
+        cfg = _write_config(data_dir=local, github_repo=target)
+        if not cfg.get("github_token"):
+            print(json.dumps({"ok": False, "need": "token", "repo": target, "create_token": token_url(target),
+                              "then_run": "journal.py set-token"}))
+            return
+        ok, msg = storage.GitHubRemote(target, cfg["github_token"]).check()
+        if not ok:
+            print(json.dumps({"ok": False, "repo": target, "error": msg, "create_token": token_url(target)}))
+            return
+    else:
+        _write_config(data_dir=local, mirror_dir=os.path.expanduser(target))
+    ok, results = push_now(local)
+    rows = load_rows(local)
+    print(json.dumps({"ok": ok, "data_dir": local, "sessions": len(rows), "sync": results}))
+
+
+def cmd_set_token(token=None):
+    """Save a GitHub token (typed hidden, never echoed) and check it can write to the repo."""
+    import getpass
+    import storage
+    token = (token or os.environ.get("BASIVO_JOURNAL_TOKEN") or getpass.getpass("Paste your GitHub token (hidden): ")).strip()
+    if not token:
+        sys.exit("no token given")
+    cfg = _load(CONFIG, {})
+    repo = cfg.get("github_repo")
+    if repo:
+        ok, msg = storage.GitHubRemote(repo, token).check()
+        if not ok:
+            sys.exit(f"token not saved: {msg}")
+    _write_config(github_token=token)
+    print(f"token saved to {CONFIG} (readable only by you)" + (f"; it can write to {repo}" if repo else ""))
+
+
+def cmd_mirror(arg):
+    """mirror auto | <folder> | off : keep a copy in a synced folder such as Google Drive."""
+    import storage
+    if arg == "off":
+        _write_config(mirror_dir=None)
+        print("mirror turned off (existing copy left in place)")
+        return
+    if arg == "auto":
+        gd = storage.find_google_drive()
+        if not gd:
+            sys.exit("Google Drive for desktop not found. Install it from https://www.google.com/drive/download/ , "
+                     "sign in, then run: journal.py mirror auto   (or pass the folder path)")
+        arg = os.path.join(gd, "basivo-journal")
+    _write_config(mirror_dir=os.path.expanduser(arg))
+    root = data_dir()
+    if root:
+        ok, results = push_now(root)
+        print(json.dumps({"ok": ok, "mirror": arg, "sync": results}))
+    else:
+        print(json.dumps({"ok": True, "mirror": arg}))
+
+
+def cmd_doctor():
+    """What this machine still needs, as JSON for /journal-setup. No git/gh/brew required."""
+    import storage
+    cfg = _load(CONFIG, {})
+    root = data_dir()
+    checks = {"os": sys.platform, "python": sys.version.split()[0], "python_path": sys.executable,
+              "data_dir": root, "sessions_local": len(load_rows(root)) if root else 0,
+              "record_chat": record_chat(), "google_drive": storage.find_google_drive(),
+              "sweeper_installed": sweeper_installed()}
+    fix = []
+    if not root:
+        fix.append("no journal data yet: run /journal-setup <owner/repo>")
+    if cfg.get("github_repo"):
+        if cfg.get("github_token"):
+            ok, msg = storage.GitHubRemote(cfg["github_repo"], cfg["github_token"]).check()
+            checks["github"] = {"repo": cfg["github_repo"], "ok": ok, "detail": msg}
+            if not ok:
+                fix.append(f"GitHub: {msg}. Create a token: {token_url(cfg['github_repo'])} then run: journal.py set-token")
+        else:
+            checks["github"] = {"repo": cfg["github_repo"], "ok": False, "detail": "no token on this machine"}
+            fix.append(f"add a GitHub token: create it at {token_url(cfg['github_repo'])} then run: journal.py set-token")
+    elif root and is_git(root):
+        checks["github"] = {"mode": "legacy git clone", "ok": True, "detail": "works; add a token to drop the git dependency"}
+    if cfg.get("mirror_dir"):
+        checks["mirror"] = {"dir": cfg["mirror_dir"], "ok": os.path.isdir(cfg["mirror_dir"])}
+        if not checks["mirror"]["ok"]:
+            fix.append("mirror folder missing (is Google Drive running and signed in?)")
+    last = (_load(STATE, {}).get("last_sync") or {})
+    checks["last_sync"] = last.get("results")
+    checks["ready"] = not fix
+    checks["fix"] = fix
+    print(json.dumps(checks, indent=1))
+
+
+# ---------- background sweep, per OS ----------
+
+TASK = "basivo-journal-sweep"
+
+
+def sweeper_installed():
+    if sys.platform == "darwin":
+        return os.path.exists(PLIST)
+    if os.name == "nt":
+        return subprocess.run(["schtasks", "/Query", "/TN", TASK], capture_output=True).returncode == 0
+    r = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+    return TASK in (r.stdout or "")
 
 
 def cmd_install_sweeper():
@@ -465,9 +643,22 @@ def cmd_install_sweeper():
     stable = os.path.join(DIR, "bin", "journal.py")
     os.makedirs(os.path.dirname(stable), exist_ok=True)
     here = os.path.dirname(os.path.abspath(__file__))
-    for name in ("journal.py", "mask_pii.py", "memory.py"):  # journal.py imports these
+    for name in ("journal.py", "mask_pii.py", "memory.py", "storage.py"):  # journal.py imports these
         with open(os.path.join(here, name)) as src, open(os.path.join(os.path.dirname(stable), name), "w") as dst:
             dst.write(src.read())
+    cmd = [sys.executable, stable, "sweep-push"]
+    if os.name == "nt":
+        tr = " ".join(f'"{c}"' for c in cmd)
+        subprocess.run(["schtasks", "/Create", "/F", "/SC", "HOURLY", "/TN", TASK, "/TR", tr], check=True, capture_output=True)
+        print(f"hourly sweep installed (Task Scheduler: {TASK})")
+        return
+    if sys.platform != "darwin":
+        line = " ".join(f"'{c}'" for c in cmd) + f" >/dev/null 2>&1 # {TASK}"
+        cur = subprocess.run(["crontab", "-l"], capture_output=True, text=True).stdout or ""
+        keep = [l for l in cur.splitlines() if TASK not in l]
+        subprocess.run(["crontab", "-"], input="\n".join(keep + [f"17 * * * * {line}"]) + "\n", text=True, check=True)
+        print("hourly sweep installed (crontab)")
+        return
     plist = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -489,9 +680,15 @@ def cmd_install_sweeper():
 
 
 def cmd_uninstall_sweeper():
-    subprocess.run(["launchctl", "unload", PLIST], capture_output=True)
-    if os.path.exists(PLIST):
-        os.remove(PLIST)
+    if os.name == "nt":
+        subprocess.run(["schtasks", "/Delete", "/F", "/TN", TASK], capture_output=True)
+    elif sys.platform != "darwin":
+        cur = subprocess.run(["crontab", "-l"], capture_output=True, text=True).stdout or ""
+        subprocess.run(["crontab", "-"], input="\n".join(l for l in cur.splitlines() if TASK not in l) + "\n", text=True)
+    else:
+        subprocess.run(["launchctl", "unload", PLIST], capture_output=True)
+        if os.path.exists(PLIST):
+            os.remove(PLIST)
     print("hourly sweep removed")
 
 
@@ -500,7 +697,7 @@ def main(args):
     root = data_dir()
     need_root = {"sweep", "sweep-push", "backfill", "stats", "sync"}
     if cmd in need_root and not root:
-        sys.exit("No data repo. Run: journal.py setup <owner/repo>")
+        sys.exit("No journal data on this machine. Run: journal.py setup <owner/repo>")
     if cmd == "checkpoint":
         cmd_checkpoint()
     elif cmd == "final":
@@ -514,21 +711,30 @@ def main(args):
         push_now(root)
     elif cmd == "backfill":
         n = sweep(root, all_files=True)
-        ok = push_now(root)
+        ok, _ = push_now(root)
         rows = load_rows(root)
         print(json.dumps({"sessions_saved_or_updated": n, "sessions_total": len(rows),
                           "hours": round(sum(r.get("minutes", 0) for r in rows) / 60, 1), "pushed": ok}))
     elif cmd == "stats":
         print(json.dumps(aggregate(load_rows(root))))
     elif cmd == "sync":
-        commit(root, "sync")
-        push_now(root)
+        ok, results = push_now(root)
+        print(json.dumps({"ok": ok, "sync": results}))
     elif cmd == "summarize" and len(args) == 2:
         row = summarize(args[1]) or {}
         chat = row.pop("_chat", [])
         print(json.dumps({**row, "chat_messages": len(chat)}, indent=2))
     elif cmd == "setup" and len(args) == 2:
         cmd_setup(args[1])
+    elif cmd == "doctor":
+        cmd_doctor()
+    elif cmd == "set-token":
+        cmd_set_token(args[1] if len(args) > 1 else None)
+    elif cmd == "mirror" and len(args) == 2:
+        cmd_mirror(args[1])
+    elif cmd == "report":
+        import report
+        print(report.build(root or sys.exit("No journal data on this machine."), args[1] if len(args) > 1 else None))
     elif cmd == "install-sweeper":
         cmd_install_sweeper()
     elif cmd == "uninstall-sweeper":

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Journal (offline)</title>
+<meta name="robots" content="noindex">
+<style>
+:root{color-scheme:light;--bg:#f6f5f2;--surface:#fff;--surface-2:#fafaf8;--border:#e7e5df;--text:#0b0b0b;--text-2:#52514e;--muted:#7a7973;--grid:#eeece6;--accent:#2a78d6;--accent-soft:#e6f0fc;--h0:#ecebe6;--h1:#b7d3f6;--h2:#6da7ec;--h3:#2a78d6;--h4:#184f95;--user:#2a78d6}
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme=light])){color-scheme:dark;--bg:#0f0f0e;--surface:#1a1a19;--surface-2:#1f1f1d;--border:#2c2c29;--text:#fff;--text-2:#c3c2b7;--muted:#8f8e85;--grid:#262624;--accent:#3987e5;--accent-soft:#16263b;--h0:#242422;--h1:#184f95;--h2:#256abf;--h3:#3987e5;--h4:#86b6ef;--user:#2d6fc2}}
+:root[data-theme=dark]{color-scheme:dark;--bg:#0f0f0e;--surface:#1a1a19;--surface-2:#1f1f1d;--border:#2c2c29;--text:#fff;--text-2:#c3c2b7;--muted:#8f8e85;--grid:#262624;--accent:#3987e5;--accent-soft:#16263b;--h0:#242422;--h1:#184f95;--h2:#256abf;--h3:#3987e5;--h4:#86b6ef;--user:#2d6fc2}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:5;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 16px;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.brand{font-weight:700}.muted{color:var(--muted)}.small{font-size:12.5px}
+nav,.seg{display:flex;gap:3px;padding:3px;background:var(--surface);border:1px solid var(--border);border-radius:999px;overflow-x:auto}
+nav button,.seg button{border:0;background:none;color:var(--text-2);padding:6px 13px;border-radius:999px;cursor:pointer;font:inherit;font-size:13.5px;white-space:nowrap}
+nav button[aria-current=page],.seg button[aria-pressed=true]{background:var(--accent);color:#fff}
+main{max-width:1200px;margin:0 auto;padding:18px 16px 40px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:12px;margin-bottom:14px}
+.tile,.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px}
+.card{margin-bottom:14px;min-width:0}.tile b{display:block;font-size:28px;letter-spacing:-.02em}
+h2{font-size:15px;margin:0 0 12px}
+.bars{display:flex;align-items:flex-end;gap:2px;height:160px}.bars div{flex:1;background:var(--h3);border-radius:3px 3px 0 0;min-height:0}
+.bars div:hover{background:var(--h4)}.axis{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:14px}
+.rank{list-style:none;margin:0;padding:0;display:grid;gap:8px}.rank li{display:grid;grid-template-columns:minmax(80px,40%) 1fr auto;gap:10px;align-items:center;font-size:13px}
+.rank span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.track{height:8px;background:var(--h0);border-radius:4px;overflow:hidden}.track i{display:block;height:100%;background:var(--h3)}
+.chats{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:14px;height:calc(100vh - 100px);min-height:480px}
+.chats>.card{margin:0;display:flex;flex-direction:column;overflow:hidden;padding:12px}
+input,select{font:inherit;font-size:13.5px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);width:100%}
+#list{list-style:none;margin:8px 0 0;padding:0;overflow-y:auto;flex:1;display:grid;gap:3px;align-content:start}
+#list button{width:100%;text-align:left;border:1px solid transparent;background:none;color:inherit;border-radius:10px;padding:9px 10px;cursor:pointer;font:inherit}
+#list button:hover{background:var(--surface-2)}#list button.on{background:var(--accent-soft);border-color:var(--border)}
+#list b{display:block;font-size:13.5px}#list small{color:var(--muted);font-size:11.5px}
+#msgs{flex:1;overflow-y:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-content:start;padding:8px 4px}
+.m{max-width:min(760px,92%);min-width:0}.m.u{justify-self:end}.m .meta{font-size:11px;color:var(--muted)}.m.u .meta{text-align:right}
+.bub{padding:10px 13px;border-radius:14px;border:1px solid var(--border);background:var(--surface-2);white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
+.m.u .bub{background:var(--user);color:#fff;border-color:transparent}
+mark{background:#fde68a;color:#000;border-radius:3px}
+.proj{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:14px}
+@media (max-width:760px){.chats{grid-template-columns:1fr;height:auto}.chats .card{max-height:70vh}}
+</style>
+<script>try{var t=localStorage.getItem("bj-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<header>
+  <div><div class="brand">◆ Claude Journal <span class="muted small">offline report</span></div><div class="muted small" id="gen"></div></div>
+  <nav id="tabs"><button data-t="overview" aria-current="page">Overview</button><button data-t="chats">Chats</button><button data-t="projects">Projects</button></nav>
+  <div class="seg" id="theme"><button data-m="light">☀</button><button data-m="system">A</button><button data-m="dark">☾</button></div>
+</header>
+<main id="app"></main>
+<script>
+(() => {
+const DATA=/*__DATA__*/null;
+const rows=DATA.rows.sort((a,b)=>(b.started_at||"").localeCompare(a.started_at||""));
+const $=(h)=>{const d=document.createElement("div");d.innerHTML=h;return d.firstElementChild};
+const esc=(s)=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const proj=(p)=>(p||"unknown").replace(/\/+$/,"").split("/").pop();
+const sum=(a,f)=>a.reduce((s,x)=>s+(+f(x)||0),0);
+const top=(o,n=8)=>Object.entries(o).sort((a,b)=>b[1]-a[1]).slice(0,n);
+const add=(acc,o)=>{for(const[k,v]of Object.entries(o||{}))acc[k]=(acc[k]||0)+(+v||0)};
+document.getElementById("gen").textContent="Generated "+new Date().toLocaleString()+" · "+rows.length+" sessions";
+function rank(items,unit){if(!items.length)return'<p class="muted">Nothing yet.</p>';const m=items[0][1]||1;return'<ul class="rank">'+items.map(([k,v])=>`<li title="${esc(k)}"><span>${esc(k)}</span><span class="track"><i style="width:${Math.max(2,v/m*100)}%"></i></span><span class="muted">${Math.round(v*10)/10} ${unit}</span></li>`).join("")+"</ul>"}
+function overview(){
+  const h=sum(rows,r=>r.minutes)/60,days=new Set(rows.map(r=>(r.started_at||"").slice(0,10)));
+  const byDay={};rows.forEach(r=>{const d=r.active_by_day&&Object.keys(r.active_by_day).length?r.active_by_day:{[(r.started_at||"").slice(0,10)]:r.minutes};add(byDay,d)});
+  const last=[];for(let i=59;i>=0;i--){const k=new Date(Date.now()-i*864e5).toISOString().slice(0,10);last.push([k,(byDay[k]||0)/60])}
+  const mx=Math.max(.01,...last.map(x=>x[1]));
+  const hrs=Array(24).fill(0);rows.forEach(r=>{for(const[k,v]of Object.entries(r.active_by_hour||{}))hrs[+k]+=v/60});const hm=Math.max(.01,...hrs);
+  const P={},L={},M={},S={};rows.forEach(r=>{P[proj(r.project)]=(P[proj(r.project)]||0)+r.minutes/60;add(L,r.languages);add(M,r.mcps);add(S,r.skills)});
+  return `<div><section class="tiles"><div class="tile">Hours<b>${h.toFixed(1)}</b></div><div class="tile">Sessions<b>${rows.length}</b></div><div class="tile">Active days<b>${days.size}</b></div><div class="tile">Messages<b>${sum(rows,r=>r.user_msgs).toLocaleString("en-US")}</b></div></section>
+  <section class="card"><h2>Hours per day · last 60 days</h2><div class="bars">${last.map(([k,v])=>`<div title="${k}: ${v.toFixed(1)} h" style="height:${v/mx*100}%"></div>`).join("")}</div><div class="axis"><span>${last[0][0]}</span><span>${last[59][0]}</span></div></section>
+  <section class="card"><h2>When you work · by hour</h2><div class="bars">${hrs.map((v,i)=>`<div title="${String(i).padStart(2,"0")}:00 · ${v.toFixed(1)} h" style="height:${v/hm*100}%"></div>`).join("")}</div><div class="axis"><span>00:00</span><span>12:00</span><span>23:00</span></div></section>
+  <section class="grid2"><div class="card"><h2>Projects (hours)</h2>${rank(top(P),"h")}</div><div class="card"><h2>Languages (edits)</h2>${rank(top(L),"")}</div><div class="card"><h2>MCP servers (calls)</h2>${rank(top(M),"")}</div><div class="card"><h2>Skills (uses)</h2>${rank(top(S),"")}</div></section></div>`}
+function projects(){const g={};rows.forEach(r=>(g[proj(r.project)]=g[proj(r.project)]||[]).push(r));
+  return '<section class="proj">'+Object.entries(g).sort((a,b)=>sum(b[1],r=>r.minutes)-sum(a[1],r=>r.minutes)).map(([n,l])=>{const L={};l.forEach(r=>add(L,r.languages));return `<div class="card"><b>${esc(n)}</b><div class="muted small">${esc(l[0].project)}</div><p><b style="font-size:22px">${(sum(l,r=>r.minutes)/60).toFixed(1)}</b> h · ${l.length} sessions · last ${(l[0].started_at||"").slice(0,10)}</p><div class="muted small">${top(L,4).map(x=>esc(x[0])).join(" · ")}</div></div>`}).join("")+"</section>"}
+function chats(){const el=$(`<div class="chats"><div class="card"><input id="q" type="search" placeholder="Search titles and chat text…"><ul id="list"></ul></div><div class="card"><input id="f" type="search" placeholder="Find in this chat"><div id="msgs"><p class="muted">Pick a session.</p></div></div></div>`);
+  const list=el.querySelector("#list"),msgs=el.querySelector("#msgs");let cur=null;
+  const hl=(t,n)=>{const e=esc(t);if(!n)return e;const re=new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"gi");return e.replace(re,m=>`<mark>${m}</mark>`)};
+  const show=()=>{if(!cur)return;const n=el.querySelector("#f").value.trim();const ms=(DATA.chats[cur]||[]).filter(m=>!n||m.x.toLowerCase().includes(n.toLowerCase()));
+    msgs.innerHTML=ms.length?ms.map(m=>`<div class="m ${m.r}"><div class="meta">${m.r=="u"?"You":"Claude"} · ${esc(m.t.replace("T"," "))}</div><div class="bub">${hl(m.x,n)}</div></div>`).join(""):'<p class="muted">No chat saved for this session, or nothing matches.</p>'};
+  const render=()=>{const q=el.querySelector("#q").value.trim().toLowerCase();
+    list.innerHTML=rows.filter(r=>!q||[r.title,r.first_prompt,r.project].some(s=>(s||"").toLowerCase().includes(q))||(DATA.chats[r.session_id]||[]).some(m=>m.x.toLowerCase().includes(q))).slice(0,300)
+      .map(r=>`<li><button data-s="${r.session_id}" class="${r.session_id==cur?"on":""}"><b>${esc(r.title||r.first_prompt||"Untitled")}</b><small>${esc(proj(r.project))} · ${(r.started_at||"").slice(0,10)} · ${Math.round(r.minutes)} min</small></button></li>`).join("")};
+  list.onclick=e=>{const b=e.target.closest("button");if(!b)return;cur=b.dataset.s;el.querySelector("#f").value=el.querySelector("#q").value;render();show()};
+  el.querySelector("#q").oninput=render;el.querySelector("#f").oninput=show;render();return el}
+const views={overview,chats,projects};
+function go(t){document.querySelectorAll("#tabs button").forEach(b=>b.dataset.t==t?b.setAttribute("aria-current","page"):b.removeAttribute("aria-current"));const v=views[t]();const app=document.getElementById("app");app.innerHTML="";app.append(typeof v=="string"?$(v):v)}
+document.getElementById("tabs").onclick=e=>{const b=e.target.closest("button");if(b)go(b.dataset.t)};
+const th=document.getElementById("theme");const setT=m=>{try{m=="system"?localStorage.removeItem("bj-theme"):localStorage.setItem("bj-theme",m)}catch(e){}m=="system"?document.documentElement.removeAttribute("data-theme"):document.documentElement.dataset.theme=m;th.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.m==m))};
+th.onclick=e=>{const b=e.target.closest("button");if(b)setT(b.dataset.m)};setT((()=>{try{return localStorage.getItem("bj-theme")||"system"}catch(e){return"system"}})());
+go("overview");
+})();
+</script>
+</body>
+</html>

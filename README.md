@@ -20,15 +20,16 @@ itself with secrets masked. From that you get:
 ## Contents
 
 1. [How it works](#how-it-works)
-2. [First-time setup](#first-time-setup)
-3. [New laptop? (move or add a machine)](#new-laptop-move-or-add-a-machine)
-4. [Memory: how Claude uses your history](#memory-how-claude-uses-your-history)
-5. [Dashboard (Vercel)](#dashboard-vercel)
-6. [Weekly email (optional)](#weekly-email-optional)
-7. [What is recorded](#what-is-recorded)
-8. [Files and folders](#files-and-folders)
-9. [Troubleshooting](#troubleshooting)
-10. [Turn things off / uninstall](#turn-things-off--uninstall)
+2. [What you need](#what-you-need)
+3. [Setup (first laptop or new laptop, any OS)](#setup-first-laptop-or-new-laptop-any-os)
+4. [Built to last](#built-to-last)
+5. [Memory: how Claude uses your history](#memory-how-claude-uses-your-history)
+6. [Offline report and dashboard](#offline-report-and-dashboard)
+7. [Weekly email (optional)](#weekly-email-optional)
+8. [What is recorded](#what-is-recorded)
+9. [Files and folders](#files-and-folders)
+10. [Troubleshooting](#troubleshooting)
+11. [Turn things off / uninstall](#turn-things-off--uninstall)
 
 ---
 
@@ -39,9 +40,10 @@ itself with secrets masked. From that you get:
    │  after each reply (every ≤5 min), at session end, and at next start (catch-up sweep)
    ▼
  ~/.basivo-journal/data      ← full local clone of your private repo
-   │  git push (background, batched)
+   │  sync in the background (GitHub API + optional Google Drive folder)
    ▼
- github.com/<you>/basivo-journal-data  (PRIVATE)   ← the permanent copy
+ github.com/<you>/basivo-journal-data  (PRIVATE)   ← shared copy for all your laptops
+ My Drive/basivo-journal                (optional) ← second backup
    ├─ sessions/YYYY/MM/<id>.json   stats for one session
    └─ chats/YYYY/MM/<id>.json      the conversation, secrets masked
         │
@@ -50,78 +52,71 @@ itself with secrets masked. From that you get:
         └─► Vercel dashboard (read-only token) → you, in the browser
 ```
 
-Nothing depends on a paid service. GitHub private repos are free, the index is
-local, and the dashboard can be redeployed anywhere.
+Nothing depends on a paid service, and no single service can lose your data
+(see [Built to last](#built-to-last)).
 
-## First-time setup
+## What you need
 
-You need: **Python 3**, **git**, the **GitHub CLI** (`gh`, logged in with
-`gh auth login`), and Claude Code.
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| **Claude Code** | ✔ | ✔ | ✔ |
+| **Python 3.8+** | `winget install Python.Python.3.12` (or the Microsoft Store) | usually built in; otherwise `xcode-select --install` | built in |
+| **A free GitHub account** | ✔ | ✔ | ✔ |
 
-1. **Install the plugin** (from the Basivo marketplace):
+That's all. **No git, GitHub CLI or Homebrew.** The plugin talks to GitHub's
+API itself.
+
+## Setup (first laptop or new laptop, any OS)
+
+1. **Install the plugin**:
    ```
    claude plugin marketplace add mohamedabubasith/basivo-plugins
    claude plugin install basivo-journal@basivo
    ```
-2. **Restart Claude Code**, then run:
+2. **Restart Claude Code** and run:
    ```
    /journal-setup <your-github-user>/basivo-journal-data
    ```
-   It checks the repo is **private** (and creates it if it doesn't exist),
-   clones it to `~/.basivo-journal/data`, and loads your past sessions.
-3. **Keep Claude Code's history longer** than the 30-day default, so old
-   sessions can always be rebuilt. Add to `~/.claude/settings.json`:
-   ```json
-   "cleanupPeriodDays": 3650
-   ```
-4. **Optional (macOS): hourly background sweep**, which catches sessions whose hooks didn't run:
-   ```
-   python3 ~/.claude/plugins/cache/basivo/basivo-journal/*/scripts/journal.py install-sweeper
-   ```
+   Claude walks you through it:
+   - **First time:** create the repo at https://github.com/new and make it
+     **Private**.
+   - **Create a token:** setup gives you a link with the settings filled in.
+     Choose *Only select repositories →* your data repo, set
+     *Contents: Read and write*, then click Generate.
+   - **Save it** in your own terminal (hidden input, never in the chat):
+     ```
+     python3 <plugin>/scripts/journal.py set-token        # Windows: py instead of python3
+     ```
+   - **Setup downloads your whole history** (about 4 s for 40 sessions).
+     Memory and the offline report work right away.
+3. **Optional extras** (setup offers these):
+   - **Google Drive backup:** `journal.py mirror auto`. It needs *Google Drive
+     for desktop* (Windows/macOS), and keeps a second copy in
+     `My Drive/basivo-journal`.
+   - **Hourly background sweep:** `journal.py install-sweeper` (launchd /
+     Task Scheduler / cron).
+   - **Keep Claude Code's history:** add `"cleanupPeriodDays": 3650` to
+     `~/.claude/settings.json`.
 
-## New laptop? (move or add a machine)
+**New laptop = the same three steps.** Use the same repo name; a new token is
+fine, and you can use one token per laptop. Two laptops can work at the same
+time: each session is its own file, and the newer copy of a file always wins.
 
-Your data is already in GitHub, so a new machine only needs the plugin and a
-clone. Old sessions, chats and search all come back. Nothing is copied by hand.
+**Retiring a laptop:** optionally run `journal.py uninstall-sweeper`, then
+revoke that laptop's token at https://github.com/settings/personal-access-tokens .
 
-1. **Install the tools**: Python 3, git, Claude Code, and the GitHub CLI.
-   ```
-   brew install gh        # macOS; see cli.github.com for others
-   gh auth login          # sign in as the same GitHub user
-   ```
-2. **Install the plugin**:
-   ```
-   claude plugin marketplace add mohamedabubasith/basivo-plugins
-   claude plugin install basivo-journal@basivo
-   ```
-3. **Restart Claude Code** and connect the **existing** repo (the same name as before):
-   ```
-   /journal-setup <your-github-user>/basivo-journal-data
-   ```
-   Or from a terminal:
-   ```
-   python3 ~/.claude/plugins/cache/basivo/basivo-journal/*/scripts/journal.py setup <your-github-user>/basivo-journal-data
-   ```
-   This clones your whole history. The search index builds itself on first use
-   (about 0.1 s per 4,000 messages).
-4. **Bring this machine's own sessions in** (only if you already used Claude Code on it):
-   ```
-   python3 ~/.claude/plugins/cache/basivo/basivo-journal/*/scripts/journal.py backfill
-   ```
-5. Settings from first-time setup: `cleanupPeriodDays`, and optionally
-   `install-sweeper`.
-6. **Check it**: start a new Claude Code session. The first message context
-   should include "Journal: N sessions…". Then ask Claude: *"search my journal
-   for <something you did before>"*.
+## Built to last
 
-**Using two laptops at once** works: each session is its own file, so machines
-never edit the same file. Each machine pulls before it pushes. The `machine`
-field shows where each session happened.
+| Piece | If it goes away | Your data |
+|---|---|---|
+| **Every laptop** keeps a full copy in `~/.basivo-journal/data` | other laptops, GitHub and Drive still have it | safe |
+| **GitHub private repo** (free) | switch to a synced folder: `journal.py setup <folder>` | safe |
+| **Google Drive mirror** (optional) | GitHub and your laptops still have it | safe |
+| **Vercel dashboard** (optional) | use `/journal-report` (offline, one HTML file) or redeploy anywhere | safe (Vercel only *reads*) |
+| **GitHub token expires** | saving continues locally; the session card tells you, and a new token (`set-token`) catches everything up | safe |
 
-**Retiring the old laptop**: nothing to do. Optionally run
-`journal.py uninstall-sweeper` there, then uninstall the plugin.
-
-**The dashboard and weekly email don't change**: they read GitHub, not your laptop.
+Everything is plain JSON (`sessions/…`, `chats/…`), so you can move it
+anywhere, forever.
 
 ## Memory: how Claude uses your history
 
@@ -150,7 +145,13 @@ matches "deployed"). It tries all words first, then any word. The same
 pasted block within one session is indexed once, and results are spread
 across sessions.
 
-## Dashboard (Vercel)
+## Offline report and dashboard
+
+**Offline report** (works forever, no server): `/journal-report` writes one
+HTML file with Overview, Chats (with search) and Projects, light/dark, and
+opens it in your browser. It contains your chats, so keep it private.
+
+**Web dashboard** (optional, Vercel free plan):
 
 The app is in [`dashboard/`](dashboard/). Deploy it with **Root Directory =
 `dashboard`**, and set these environment variables:
@@ -205,8 +206,8 @@ Check what a session would store: `journal.py summarize <transcript.jsonl>`.
 
 | Path | What it is |
 |---|---|
-| `~/.basivo-journal/data/` | your private repo clone (the real data) |
-| `~/.basivo-journal/config.json` | `data_dir`, `record_chat`, dashboard key (mode 600) |
+| `~/.basivo-journal/data/` | your full local copy (`sessions/`, `chats/`) |
+| `~/.basivo-journal/config.json` | repo, **GitHub token**, mirror folder, `record_chat`, dashboard key (readable only by you) |
 | `~/.basivo-journal/index.db` | search index. Safe to delete; it rebuilds automatically. |
 | `~/.basivo-journal/state.json` | last sweep/push times and hook throttling |
 | `~/.basivo-journal/card.txt` | last start-of-session card (offline fallback) |
@@ -217,10 +218,12 @@ Check what a session would store: `journal.py summarize <transcript.jsonl>`.
 
 | Symptom | Fix |
 |---|---|
+| Not sure what's wrong | `journal.py doctor` lists what this machine still needs, with the fix for each |
 | No "Journal: …" line at session start | `/journal-setup` wasn't run on this machine, or the plugin isn't enabled: `claude plugin list` |
+| "journal sync to GitHub is paused" | The token expired: create a new one (link in `doctor`), then run `journal.py set-token` |
+| Python not found (Windows) | `winget install Python.Python.3.12`, then restart Claude Code |
 | Claude doesn't use the journal tools | `claude mcp list` should show `plugin:basivo-journal:journal`. Restart Claude Code after installing or updating. |
-| Sessions missing on the dashboard | Run `journal.py sweep` and then `journal.py sync`. Check `git -C ~/.basivo-journal/data status`. |
-| Push fails | `gh auth status` and `git -C ~/.basivo-journal/data push` to see the error |
+| Sessions missing on the dashboard | Run `journal.py sweep` and then `journal.py sync`, which prints each remote's result |
 | Dashboard says "Couldn't load your data" | Check `GITHUB_TOKEN` (not expired, access to the data repo) and `DATA_REPO` in Vercel |
 | Search misses something recent | The index refreshes on each query. If needed, delete `~/.basivo-journal/index.db`. |
 
@@ -238,6 +241,7 @@ Check what a session would store: `journal.py summarize <transcript.jsonl>`.
 ```
 python3 tests/test_journal.py
 python3 tests/test_memory.py
+python3 tests/test_storage.py
 ```
 
 Part of the [Basivo plugins](https://github.com/mohamedabubasith/basivo-plugins).

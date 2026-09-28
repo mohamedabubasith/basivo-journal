@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/journal.py\" checkpoint",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run\" journal.py checkpoint",
             "timeout": 10
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/journal.py\" final",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run\" journal.py final",
             "timeout": 15
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/journal.py\" start",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run\" journal.py start",
             "timeout": 15
           }
         ]

@@ -1,6 +1,6 @@
 {
   "name": "basivo-journal",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Personal memory and activity journal for Claude Code: every session is saved live to your own private GitHub repo (stats plus chat history, secrets masked). Claude can search your past work with journal_search / journal_session / journal_recent, each new session starts with a short recap, and a dashboard (tabs, dark/light, chat viewer) deploys free on Vercel.",
   "author": {
     "name": "Basivo",
@@ -23,9 +23,10 @@
   ],
   "mcpServers": {
     "journal": {
-      "command": "python3",
+      "command": "sh",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT}/scripts/mcp_server.py"
+        "${CLAUDE_PLUGIN_ROOT}/scripts/run",
+        "mcp_server.py"
       ]
     }
   }
