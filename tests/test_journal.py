@@ -37,6 +37,7 @@ with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as f:
     f.write("\n".join(lines))
 row = journal.summarize(f.name)
 os.unlink(f.name)
+chat = row.pop("_chat")
 
 assert row["session_id"] == "sess-1"
 assert row["project"] == "~/code/app", row["project"]
@@ -49,6 +50,11 @@ assert row["skills"] == {"basivo-operator:basivo-draft": 1}
 assert row["sites"] == {"medium.com": 1}
 assert row["tokens_out"] == 150 and row["model"] == "claude-x"
 assert "hunter2" not in json.dumps(row), "chat text or tool input leaked into the row"
+assert [m["role"] for m in chat] == ["user"], chat               # tool results and tool calls aren't chat
+assert "hunter2" not in json.dumps(chat) and "[REDACTED]" in chat[0]["text"], chat   # secrets masked in chat
+assert row["first_prompt"] and "hunter2" not in row["first_prompt"]
+assert sum(row["active_by_hour"].values()) == 7.0 and sum(row["active_by_day"].values()) == 7.0
+assert journal.clean_text("a <system-reminder>x</system-reminder>b <command-name>/journal</command-name>") == "a b /journal"
 assert journal.mcp_server("mcp__playwright__browser_click") == "playwright"
 assert journal.mcp_server("mcp__plugin_basivo-qa_playwright__browser_click") == "basivo-qa/playwright"
 assert journal.mcp_server("mcp__plugin_context-mode_context-mode__ctx_search") == "context-mode"

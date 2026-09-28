@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.3.0] - 2026-09-28
+
+### Added
+- **Chat history**: your messages and Claude's written replies are saved per
+  session under `chats/YYYY/MM/<id>.json` in your private repo. Tool calls,
+  command output and file contents are not stored. Secrets are masked first
+  (tokens, API keys, `password: …`, `key=value`, cards, emails) with a new
+  prose-safe masker mode that leaves normal words, paths and IDs alone.
+  Turn it off with `"record_chat": false` in `~/.basivo-journal/config.json`.
+- Session **titles** and first prompt, plus **active minutes by hour and by
+  day** (local time) for "when you work" charts and correct midnight splits.
+- **Dashboard v3**: tabs (Overview, Chats, Projects, Tools, Learning),
+  light/dark/system theme with no flash, live refresh every minute, chat
+  viewer with search, code blocks and copy, hour-of-day and weekday charts,
+  best streak, project cards with trend lines, CSV export, count-up numbers,
+  animated charts, mobile layout.
+- `/api/rows` and `/api/chat` (passcode cookie required).
+
+### Security
+- Masker now recognizes GitHub fine-grained tokens (`github_pat_…`) and
+  Anthropic keys (`sk-ant-…`).
+
 ## [0.2.0] - 2026-09-28
 
 ### Changed

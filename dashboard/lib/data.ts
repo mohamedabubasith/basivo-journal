@@ -67,3 +67,42 @@ export async function loadRows(): Promise<Row[]> {
   const local = process.env.LOCAL_DATA_DIR;
   return local ? fromDisk(local) : fromGitHub();
 }
+
+// ---------- chats (loaded one at a time, only when opened) ----------
+
+export type ChatMessage = { role: "user" | "assistant"; ts: string; text: string };
+export type Chat = { session_id: string; title: string; project: string; started_at: string; messages: ChatMessage[] };
+
+const SAFE = /^[0-9]{4}\/[0-9]{2}\/[A-Za-z0-9-]{8,80}$/;
+
+export async function loadChat(month: string, id: string): Promise<Chat | null> {
+  const rel = `${month}/${id}`;
+  if (!SAFE.test(rel)) return null; // no path tricks
+  const local = process.env.LOCAL_DATA_DIR;
+  if (local) {
+    try {
+      const text = await fs.readFile(path.join(local.replace(/^~/, process.env.HOME || ""), "chats", rel + ".json"), "utf8");
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  }
+  const token = process.env.GITHUB_TOKEN;
+  const [owner, name] = (process.env.DATA_REPO || "").split("/");
+  const res = await fetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query: "query($o:String!,$n:String!,$e:String!){repository(owner:$o,name:$n){object(expression:$e){... on Blob{text}}}}",
+      variables: { o: owner, n: name, e: `${process.env.DATA_BRANCH || "main"}:chats/${rel}.json` },
+    }),
+    cache: "no-store",
+  });
+  const body = await res.json();
+  const text = body.data?.repository?.object?.text;
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    return null;
+  }
+}

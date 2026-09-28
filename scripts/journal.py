@@ -20,6 +20,7 @@ Commands:
   journal.py install-sweeper / uninstall-sweeper   hourly sweep via launchd (macOS)
 """
 import collections
+import re
 import datetime as dt
 import glob
 import json
@@ -29,6 +30,9 @@ import subprocess
 import sys
 import time
 import urllib.parse
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from mask_pii import mask, mask_prose  # noqa: E402  (same masker as basivo-operator)
 
 HOME = os.path.expanduser("~")
 DIR = os.environ.get("BASIVO_JOURNAL_HOME", os.path.join(HOME, ".basivo-journal"))
@@ -51,6 +55,24 @@ EXT_LANG = {
     "vue": "Vue", "svelte": "Svelte", "lua": "Lua", "r": "R",
 }
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+MSG_MAX_CHARS = 6000        # per stored chat message
+_NOISE = re.compile(r"<(system-reminder|ide_[a-z_]+|local-command-stdout|local-command-caveat|command-message|command-args)>.*?</\1>", re.S)
+
+
+def clean_text(text):
+    """Chat text as the user saw it: drop injected context tags, mask secrets, cap length."""
+    text = _NOISE.sub("", text or "")
+    text = re.sub(r"<command-name>(.*?)</command-name>", r"\1", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    if len(text) > MSG_MAX_CHARS:
+        text = text[:MSG_MAX_CHARS] + f"\n… [{len(text) - MSG_MAX_CHARS} more characters not stored]"
+    return mask_prose(text)
+
+
+def _content_text(content):
+    if isinstance(content, str):
+        return content
+    return "\n".join(c.get("text", "") for c in content or [] if isinstance(c, dict) and c.get("type") == "text")
 
 
 # ---------- summarize one transcript ----------
@@ -89,8 +111,9 @@ def summarize(path):
     times, models = [], collections.Counter()
     tools, mcps, skills = collections.Counter(), collections.Counter(), collections.Counter()
     langs, sites = collections.Counter(), collections.Counter()
-    session_id = cwd = None
+    session_id = cwd = title = None
     user_msgs = tool_calls = tokens_out = 0
+    chat = []
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             try:
@@ -103,10 +126,24 @@ def summarize(path):
             if t:
                 times.append(t)
             typ, msg = d.get("type"), d.get("message") or {}
-            if typ == "user" and d.get("turnOrigin", (d.get("origin") or {}).get("kind")) == "human":
+            if typ == "ai-title" and d.get("aiTitle"):
+                title = d["aiTitle"]
+            human = typ == "user" and not d.get("isSidechain") and (
+                d.get("turnOrigin", (d.get("origin") or {}).get("kind")) == "human"
+                or (not d.get("toolUseResult") and isinstance(msg.get("content"), str)))
+            if human:
                 user_msgs += 1
-            elif typ == "user" and not d.get("toolUseResult") and isinstance(msg.get("content"), str):
-                user_msgs += 1
+                txt = clean_text(_content_text(msg.get("content")))
+                if txt:
+                    chat.append({"role": "user", "ts": d.get("timestamp"), "text": txt})
+            if typ == "assistant" and not d.get("isSidechain"):
+                txt = _content_text(msg.get("content"))
+                if txt.strip():
+                    txt = clean_text(txt)
+                    if chat and chat[-1]["role"] == "assistant":  # one reply may span several records
+                        chat[-1]["text"] = (chat[-1]["text"] + "\n\n" + txt)[: MSG_MAX_CHARS * 2]
+                    else:
+                        chat.append({"role": "assistant", "ts": d.get("timestamp"), "text": txt})
             if typ != "assistant":
                 continue
             if msg.get("model") and not msg["model"].startswith("<"):
@@ -137,7 +174,15 @@ def summarize(path):
     if not session_id or not times:
         return None
     times.sort()
-    active = sum(min((b - a).total_seconds(), IDLE_CAP_S) for a, b in zip(times, times[1:]))
+    active = 0.0
+    by_hour, by_day = collections.Counter(), collections.Counter()
+    for a, b in zip(times, times[1:]):
+        gap = min((b - a).total_seconds(), IDLE_CAP_S)
+        active += gap
+        local = a.astimezone()  # the machine's local time: "when you work"
+        by_hour[str(local.hour)] += gap / 60
+        by_day[local.date().isoformat()] += gap / 60
+    first_prompt = next((m["text"] for m in chat if m["role"] == "user"), "")
     project = (cwd or "").replace(HOME, "~")
     return {
         "session_id": session_id,
@@ -155,6 +200,11 @@ def summarize(path):
         "sites": dict(sites.most_common(10)),
         "model": models.most_common(1)[0][0] if models else "",
         "tokens_out": tokens_out,
+        "title": mask(title or "")[:120],
+        "first_prompt": " ".join(first_prompt.split())[:200],
+        "active_by_hour": {k: round(v, 1) for k, v in sorted(by_hour.items(), key=lambda x: int(x[0])) if v >= 0.1},
+        "active_by_day": {k: round(v, 1) for k, v in sorted(by_day.items()) if v >= 0.1},
+        "_chat": chat,
     }
 
 
@@ -198,15 +248,32 @@ def write_row(root, row):
     return True
 
 
+def chat_path(root, row):
+    return session_path(root, row).replace(os.sep + "sessions" + os.sep, os.sep + "chats" + os.sep, 1)
+
+
+def record_chat():
+    return _load(CONFIG, {}).get("record_chat", True)
+
+
 def save_transcript(root, path, source):
     row = summarize(path) if path and os.path.exists(path) else None
     if not row or row["minutes"] <= 0:
         return False
+    chat = row.pop("_chat", [])
+    wrote_chat = False
+    if record_chat() and chat:
+        doc = {"session_id": row["session_id"], "title": row["title"], "project": row["project"],
+               "started_at": row["started_at"], "messages": chat}
+        cp = chat_path(root, row)
+        if _load(cp, None) != doc:
+            _save(cp, doc)
+            wrote_chat = True
     row["source"] = source
     old = _load(session_path(root, row), None)
     if old and old.get("source") != source and source == "sweep":
         row["source"] = old["source"]  # keep hook/backfill label on a sweep refresh
-    return write_row(root, row)
+    return write_row(root, row) or wrote_chat
 
 
 def _git(root, *args, timeout=60):
@@ -214,7 +281,7 @@ def _git(root, *args, timeout=60):
 
 
 def commit(root, msg):
-    _git(root, "add", "-A", "sessions")
+    _git(root, "add", "-A", "sessions", "chats")
     if _git(root, "diff", "--cached", "--quiet").returncode == 0:
         return False
     _git(root, "commit", "-q", "-m", msg)
@@ -445,7 +512,9 @@ def main(args):
         commit(root, "sync")
         push_now(root)
     elif cmd == "summarize" and len(args) == 2:
-        print(json.dumps(summarize(args[1]), indent=2))
+        row = summarize(args[1]) or {}
+        chat = row.pop("_chat", [])
+        print(json.dumps({**row, "chat_messages": len(chat)}, indent=2))
     elif cmd == "setup" and len(args) == 2:
         cmd_setup(args[1])
     elif cmd == "install-sweeper":

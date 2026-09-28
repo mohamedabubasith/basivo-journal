@@ -16,6 +16,10 @@ export type Row = {
   model: string;
   tokens_out: number;
   source?: string;
+  title?: string;
+  first_prompt?: string;
+  active_by_hour?: Counts;
+  active_by_day?: Counts;
 };
 
 export type Ranked = { name: string; value: number };
@@ -105,4 +109,42 @@ export function card(rows: Row[], now = Date.now()) {
   const names = (l: Ranked[]) => l.slice(0, 4).map((x) => x.name).join(", ") || "n/a";
   return `Journal: ${all.sessions} sessions, ${all.hours} h since ${first}; this week ${week.hours} h, streak ${streak(rows, now)} d. ` +
     `Main projects: ${names(month.projects)}. Languages: ${names(all.languages)}. Tools/MCPs: ${names(month.mcps)}.`;
+}
+
+export function bestStreak(rows: Row[]) {
+  const days = [...new Set(rows.flatMap((r) => Object.keys(r.active_by_day || { [dayKey(r.started_at)]: 1 })))].sort();
+  let best = 0, run = 0, prev = 0;
+  for (const d of days) {
+    const ms = Date.parse(d);
+    run = prev && ms - prev === DAY ? run + 1 : 1;
+    best = Math.max(best, run);
+    prev = ms;
+  }
+  return best;
+}
+
+/** Minutes per calendar day (uses per-day buckets when present, so midnight-spanning sessions split correctly). */
+export function minutesByDay(rows: Row[]) {
+  const m: Counts = {};
+  for (const r of rows) {
+    const days = r.active_by_day && Object.keys(r.active_by_day).length ? r.active_by_day : { [dayKey(r.started_at)]: r.minutes };
+    for (const [d, v] of Object.entries(days)) m[d] = (m[d] || 0) + v;
+  }
+  return m;
+}
+
+export function minutesByHour(rows: Row[]) {
+  const h = Array(24).fill(0) as number[];
+  for (const r of rows) for (const [k, v] of Object.entries(r.active_by_hour || {})) h[+k] += v;
+  return h;
+}
+
+export function minutesByWeekday(rows: Row[]) {
+  const w = Array(7).fill(0) as number[]; // Mon..Sun
+  for (const [d, v] of Object.entries(minutesByDay(rows))) w[(new Date(d + "T12:00:00Z").getUTCDay() + 6) % 7] += v;
+  return w;
+}
+
+export function monthKey(r: Row) {
+  return (r.started_at || "").slice(0, 7).replace("-", "/");
 }

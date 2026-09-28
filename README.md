@@ -4,9 +4,10 @@ A personal activity journal for Claude Code. Every session becomes **one small
 JSON file** in **your own private GitHub repo**, saved live while you work.
 From that you get:
 
-- a **dashboard** (Next.js, deploy free on Vercel, passcode-protected): hours
-  per day and week, hours by project, a yearly heat map, languages, MCP
-  servers, skills, tools, sites, a learning timeline, and a session list
+- a **dashboard** (Next.js, deploy free on Vercel, passcode-protected) with
+  tabs for Overview, Chats, Projects, Tools and Learning, light/dark mode,
+  live refresh, a searchable **chat history** viewer, hour/weekday charts,
+  project trends and CSV export
 - `/journal` in Claude Code: your hours, streak, strengths, and what's new
 - a short **"about me" card** added to every new session (about 80 tokens)
 - an optional **Sunday email digest** (any scheduler: n8n, cron, GitHub Actions)
@@ -36,14 +37,16 @@ conflict.
 
 ## What is recorded (and what never is)
 
-| Recorded (counts and names only) | Never recorded |
+| Recorded | Never recorded |
 |---|---|
-| session id, start/end, active minutes (idle gaps over 5 min don't count) | your messages or Claude's replies |
-| project folder (`~/…`), machine name | file contents, diffs, commands |
-| file **languages** edited (by extension) | tool inputs or outputs |
-| tool / MCP server / skill **names** and call counts | passwords, keys, tokens |
-| site **hostnames** from browser/fetch tools | full URLs, page content |
-| model name, output token total | |
+| session id, title, start/end, active minutes (idle gaps over 5 min don't count), minutes by hour and day | tool calls' inputs and outputs, command output |
+| project folder (`~/…`), machine name | file contents, diffs |
+| file **languages** edited (by extension); tool / MCP / skill **names** and counts | secrets: tokens, API keys, passwords, `key=value` credentials, cards, emails are **masked** before saving |
+| site **hostnames** from browser/fetch tools; model; output token total | full URLs, page content |
+| **chat history**: your messages and Claude's written replies (`chats/`), secrets masked; switch off with `"record_chat": false` | |
+
+Everything lives in **your private repo**. The dashboard only loads a chat
+when you open it, behind your passcode.
 
 Check it yourself: `scripts/journal.py summarize <transcript.jsonl>` prints the
 exact record for a session.

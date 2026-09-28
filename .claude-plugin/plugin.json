@@ -1,7 +1,7 @@
 {
   "name": "basivo-journal",
-  "version": "0.2.0",
-  "description": "Personal activity journal for Claude Code: every session becomes one small JSON file in your own private GitHub repo, saved live while you work, with a catch-up sweep so nothing is missed. Shows your hours, projects, strengths and what you're learning, and gives every new session a short 'about me' card. No chat text or file contents are recorded.",
+  "version": "0.3.0",
+  "description": "Personal activity journal for Claude Code: every session is saved live to your own private GitHub repo (stats plus your chat history, with secrets masked), with a catch-up sweep so nothing is missed. Comes with a dashboard (tabs, dark/light, chat viewer, charts) you can deploy free on Vercel.",
   "author": {
     "name": "Basivo",
     "url": "https://basivo.in"

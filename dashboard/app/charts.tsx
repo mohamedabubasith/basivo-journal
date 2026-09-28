@@ -178,3 +178,41 @@ export function RankList({ items, unit }: { items: { name: string; value: number
     </ol>
   );
 }
+
+/** Small labelled profile bars: hour-of-day or weekday distribution. */
+export function Profile({ values, labels, unit = "h", label, highlight }: { values: number[]; labels: string[]; unit?: string; label: string; highlight?: number }) {
+  const [tip, setTip] = useState<Tip>(null);
+  const max = Math.max(1e-9, ...values);
+  const peak = values.indexOf(Math.max(...values));
+  return (
+    <div className="profile" role="img" aria-label={label}>
+      <div className="profile-bars">
+        {values.map((v, i) => (
+          <div key={i} className="profile-col"
+            onMouseEnter={(e) => { const el = e.currentTarget; setTip({ x: el.offsetLeft + el.offsetWidth / 2, y: el.offsetTop, body: <><b>{labels[i]}</b><br />{v.toFixed(1)} {unit}</> }); }}
+            onMouseLeave={() => setTip(null)}>
+            <span className={`profile-bar${i === (highlight ?? peak) ? " is-peak" : ""}`} style={{ height: `${Math.max(v > 0 ? 3 : 0, (v / max) * 100)}%` }} />
+          </div>
+        ))}
+      </div>
+      <div className="profile-labels">
+        {labels.map((l, i) => <span key={i}>{labels.length > 12 ? (i % 3 === 0 ? l : "") : l}</span>)}
+      </div>
+      <Tooltip tip={tip} />
+    </div>
+  );
+}
+
+/** Inline trend line for cards. */
+export function Sparkline({ values, width = 120, height = 32 }: { values: number[]; width?: number; height?: number }) {
+  if (values.length < 2) return null;
+  const max = Math.max(1e-9, ...values);
+  const pts = values.map((v, i) => [(i / (values.length - 1)) * width, height - 2 - (v / max) * (height - 4)]);
+  const d = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + "," + p[1].toFixed(1)).join("");
+  return (
+    <svg width={width} height={height} className="spark" aria-hidden>
+      <path d={`${d}L${width},${height}L0,${height}Z`} className="spark-fill" />
+      <path d={d} className="spark-line" />
+    </svg>
+  );
+}
